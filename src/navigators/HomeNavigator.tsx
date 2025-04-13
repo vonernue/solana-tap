@@ -22,19 +22,19 @@ export function HomeNavigator() {
         header: () => <TopBar />,
         tabBarIcon: ({ focused, color, size }) => {
           switch (route.name) {
-            case "Home":
+            case "Send":
               return (
                 <MaterialCommunityIcon
-                  name={focused ? "home" : "home-outline"}
+                  name={focused ? "send" : "send-outline"}
                   size={size}
                   color={color}
                 />
               );
-            case "Blank":
+            case "Receive":
               return (
                 <MaterialCommunityIcon
                   name={
-                    focused ? "application-edit" : "application-edit-outline"
+                    focused ? "inbox-arrow-down" : "inbox-arrow-down-outline"
                   }
                   size={size}
                   color={color}
@@ -44,8 +44,8 @@ export function HomeNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Blank" component={BlankScreen} />
+      <Tab.Screen name="Send" component={HomeScreen} />
+      <Tab.Screen name="Receive" component={BlankScreen} />
     </Tab.Navigator>
   );
 }
