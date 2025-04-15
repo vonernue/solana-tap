@@ -1,9 +1,11 @@
 import React, { useState, useContext } from 'react';
 import { useAuthorization } from "../utils/useAuthorization";
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
+import { Text, Button, TextInput, useTheme } from "react-native-paper";
+import { AppModal } from "../components/ui/app-modal";
 import { HCESession, HCESessionContext, NFCTagType4NDEFContentType, NFCTagType4 } from 'react-native-hce';
 
-async function startHCE(message: string){
+async function startHCE(message: string, modalOpen: () => void) {
     try {
         const tag = new NFCTagType4({
             type: NFCTagType4NDEFContentType.Text,
@@ -12,13 +14,13 @@ async function startHCE(message: string){
         });
 
         let session = await HCESession.getInstance();
-        console.log('HCESession instance created:', session);
 
         await session.setApplication(tag);
-        console.log('Application set on tag:', tag);
-
+        console.log('HCE tag set:', tag);
         await session.setEnabled(true);
-        console.log('HCE session enabled');
+        session.on(HCESession.Events.HCE_STATE_READ, () => {
+            modalOpen();
+        })
     } catch (error) {
         console.error('Error starting HCE:', error);
         throw error;
@@ -27,6 +29,8 @@ async function startHCE(message: string){
 
 export default function ReceiveScreen () {
     const { selectedAccount } = useAuthorization();
+    const [requestModalVisible, setRequestModalVisible] = useState(false);
+    const [waitTxModalVisible, setWaitTxModalVisible] = useState(false);
     const [amount, setAmount] = useState('');
     const handleRequest = async () => {
         if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -41,8 +45,11 @@ export default function ReceiveScreen () {
         };
 
         try {
-            await startHCE(JSON.stringify(requestData));
-            Alert.alert('Request Started', JSON.stringify(requestData));
+            await startHCE(JSON.stringify(requestData), () => {
+                setWaitTxModalVisible(true);
+            }
+            );
+            setRequestModalVisible(true);
         } catch (error) {
             Alert.alert('Error', 'Failed to start NFC emulation.');
             console.error(error);
@@ -50,29 +57,47 @@ export default function ReceiveScreen () {
     };
 
     return (
-        
-        <View style={styles.container}>
-            <Text style={styles.label}>Enter Amount to Request (SOL):</Text>
-            <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="Enter amount"
-            />
-            <Button title="Request SOL" onPress={handleRequest} />
-        </View>
+        <>
+            <View style={styles.screenContainer}>
+                <Text style={styles.label}>Enter Amount to Request (SOL):</Text>
+                <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    value={amount}
+                    onChangeText={setAmount}
+                    placeholder="Enter amount"
+                />
+                <Button mode="contained" onPress={handleRequest} style={styles.button}>
+                    Request
+                </Button>
+            </View>
+            <AppModal
+                title={`Request ${amount} SOL`}
+                hide={() => setRequestModalVisible(false)}
+                show={requestModalVisible}
+            >
+                <View style={{ padding: 20 }}>
+                    <Text>
+                        Tap your phone with another device to send {amount} SOL.
+                    </Text>
+                </View>
+            </AppModal>
+            <AppModal
+                title={`Waiting Transaction...`}
+                hide={() => setWaitTxModalVisible(false)}
+                show={waitTxModalVisible}
+            >
+                <View style={{ padding: 20 }}>
+                    <Text>
+                        Waiting for transaction to be completed...
+                    </Text>
+                </View>
+            </AppModal>
+        </>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#f5f5f5',
-    },
     label: {
         fontSize: 16,
         marginBottom: 8,
@@ -80,11 +105,23 @@ const styles = StyleSheet.create({
     input: {
         width: '100%',
         height: 40,
-        borderColor: '#ccc',
-        borderWidth: 1,
-        borderRadius: 4,
-        paddingHorizontal: 8,
-        marginBottom: 16,
-        backgroundColor: '#fff',
+    },
+    button: {
+        marginTop: 16,
+    },
+    screenContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16,
+    },
+    centeredContainer: {
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    tapToSendText: {
+        marginTop: 16,
+        fontSize: 18,
+        fontWeight: "bold",
     },
 });
