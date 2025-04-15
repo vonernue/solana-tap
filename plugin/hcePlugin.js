@@ -11,7 +11,7 @@ const AID_XML_CONTENT = `<?xml version="1.0" encoding="utf-8"?>
 <host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
                    android:description="@string/app_name"
                    android:requireDeviceUnlock="false">
-  <aid-group android:category="other"
+  <aid-group android:category="payment"
              android:description="@string/app_name">
     <aid-filter android:name="D2760000850101" />
   </aid-group>
@@ -59,7 +59,7 @@ const withHceManifest = (config) => {
       $: {
         "android:name": "com.reactnativehce.services.CardService",
         "android:exported": "true",
-        "android:enabled": "true",
+        "android:enabled": "false",
         "android:permission": "android.permission.BIND_NFC_SERVICE",
       },
       "intent-filter": [

@@ -5,6 +5,7 @@ import { HomeScreen } from "../screens/HomeScreen";
 import MaterialCommunityIcon from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTheme } from "react-native-paper";
 import BlankScreen from "../screens/BlankScreen";
+import ReceiveScreen from "../screens/ReceiveScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -45,7 +46,7 @@ export function HomeNavigator() {
       })}
     >
       <Tab.Screen name="Send" component={HomeScreen} />
-      <Tab.Screen name="Receive" component={BlankScreen} />
+      <Tab.Screen name="Receive" component={ReceiveScreen} />
     </Tab.Navigator>
   );
 }
