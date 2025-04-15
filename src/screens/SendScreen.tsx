@@ -26,7 +26,6 @@ export function SendScreen() {
 
       while (true) {
         const tag = await NfcManager.getTag();
-        console.log("Got tag:", tag);
 
         // Select APP
         let response = await NfcManager.transceive([
@@ -48,7 +47,7 @@ export function SendScreen() {
         const jsonStringParsed = String.fromCharCode.apply(null, jsonString);
         const jsonData = JSON.parse(jsonStringParsed);
         const { token, amount, address } = jsonData;
-
+        console.log("Parsed NFC data:", jsonData);
         if (token !== "SOL") {
           Alert.alert("Error", "Invalid token type. Only SOL is supported.");
           continue;
