@@ -110,15 +110,6 @@ export function HomeScreen() {
             <SignInFeature />
           </>
         )}
-        {nfcEnabled ? (
-          <Button mode="contained" onPress={startScanning}>
-            Start NFC Scan
-          </Button>
-        ) : (
-          <Text style={{ marginTop: 16, color: "red" }}>
-            NFC is not enabled on this device.
-          </Text>
-        )}
       </View>
       {
         selectedAccount ? (
