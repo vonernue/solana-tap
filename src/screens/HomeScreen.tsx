@@ -46,54 +46,6 @@ export function HomeScreen() {
     };
   }, []);
 
-  // Start NFC Scanning
-  const startScanning = async () => {
-    try {
-      await NfcManager.start();
-      await NfcManager.requestTechnology(NfcTech.IsoDep);
-      const tag = await NfcManager.getTag();
-      console.log('Got tag:', tag);
-  
-      // Select APP
-      let response = await NfcManager.transceive([0x00, 0xA4, 0x04, 0x00, 0x07, 0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00]);
-      // if (JSON.stringify(response) !== JSON.stringify([0x90, 0x00])) {
-      //   Alert.alert("Error", "Failed to communicate with NFC tag (APP)");
-      //   return;
-      // }
-      // Select File
-      response = await NfcManager.transceive([0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x04]);
-      if (JSON.stringify(response) !== JSON.stringify([0x90, 0x00])) {
-        Alert.alert("Error", "Failed to communicate with NFC tag (File)");
-        return;
-      }
-      // Read File
-      response = await NfcManager.transceive([0x00, 0xB0, 0x00, 0x00, 0xFF]);
-      // Parse response string from { (7B)
-      const startIndex = response.indexOf(0x7B);
-      const endIndex = response.indexOf(0x7D);
-      const jsonString = response.slice(startIndex, endIndex + 1);
-      const jsonStringParsed = String.fromCharCode.apply(null, jsonString);
-      // Alert.alert("Success", `NFC Tag Data: ${jsonStringParsed}`);
-      const jsonData = JSON.parse(jsonStringParsed);
-      const { token, amount, address } = jsonData;
-      if (token !== "SOL") {
-        Alert.alert("Error", "Invalid token type. Only SOL is supported.");
-        return;
-      }
-      if (!address || !amount) {
-        Alert.alert("Error", "Invalid address or amount.");
-        return;
-      }
-      setDestinationAddress(address);
-      setAmount(amount);
-      setShowTransferSolModal(true);
-    } catch (ex) {
-      console.warn('NFC read error', ex);
-    } finally {
-      NfcManager.cancelTechnologyRequest();
-    }
-  };
-
   return (
     <>
       <View style={styles.screenContainer}>
