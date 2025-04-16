@@ -17,6 +17,7 @@ export function SendScreen() {
   const [showTransferSolModal, setShowTransferSolModal] = useState(false);
   const [destinationAddress, setDestinationAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [token, setToken] = useState("SOL");
   const theme = useTheme();
 
   const startContinuousScanning = async () => {
@@ -48,8 +49,8 @@ export function SendScreen() {
         const jsonData = JSON.parse(jsonStringParsed);
         const { token, amount, address } = jsonData;
         console.log("Parsed NFC data:", jsonData);
-        if (token !== "SOL") {
-          Alert.alert("Error", "Invalid token type. Only SOL is supported.");
+        if (token !== "SOL" && token !== "USDC") {
+          Alert.alert("Error", "Invalid token type.");
           continue;
         }
         if (!address || !amount) {
@@ -59,6 +60,7 @@ export function SendScreen() {
 
         setDestinationAddress(address);
         setAmount(amount);
+        setToken(token);
         setShowTransferSolModal(true);
         break; // Exit the loop after successfully reading a tag
       }
@@ -113,6 +115,7 @@ export function SendScreen() {
           srcAddr={selectedAccount.publicKey}
           destAddr={destinationAddress}
           amount={amount}
+          token={token}
         />
       ) : null}
     </>
@@ -124,13 +127,15 @@ export function SolConfirmationModal ({
   show,
   srcAddr,
   destAddr,
-  amount
+  amount,
+  token
 }: {
   hide: () => void;
   show: boolean;
   srcAddr: PublicKey;
   destAddr: string;
   amount: string;
+  token: string;
 })  {
   const transferSol = useTransferSol({ address: srcAddr });
 
@@ -156,7 +161,7 @@ export function SolConfirmationModal ({
     >
       <View style={{ padding: 20 }}>
         <Text>
-          Are you sure you want to send {amount} SOL to {destAddr}?
+          Are you sure you want to send {amount} {token} to {destAddr}?
         </Text>
       </View>
     </AppModal>
