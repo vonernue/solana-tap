@@ -6,7 +6,6 @@ import NfcManager, { NfcTech, Ndef } from "react-native-nfc-manager";
 import { useAuthorization } from "../utils/useAuthorization";
 import { AccountDetailFeature } from "../components/account/account-detail-feature";
 import { SignInFeature } from "../components/sign-in/sign-in-feature";
-import { AppModal } from "../components/ui/app-modal";
 
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
@@ -63,64 +62,8 @@ export function HomeScreen() {
           </>
         )}
       </View>
-      {
-        selectedAccount ? (
-          <SolConfirmationModal
-            hide={() => setShowTransferSolModal(false)}
-            show={showTransferSolModal}
-            srcAddr={selectedAccount.publicKey}
-            destAddr = {destinationAddress}
-            amount={amount}
-          />
-        ) : null
-      }
   </>
   );
-}
-
-export function SolConfirmationModal ({
-  hide,
-  show,
-  srcAddr,
-  destAddr,
-  amount
-}: {
-  hide: () => void;
-  show: boolean;
-  srcAddr: PublicKey;
-  destAddr: string;
-  amount: string;
-})  {
-  const transferSol = useTransferSol({ address: srcAddr });
-
-  return (
-    <AppModal
-      title="Send SOL"
-      hide={hide}
-      show={show}
-      submit={() => {
-        if (transferSol) {
-          transferSol
-            .mutateAsync({
-              destination: new PublicKey(destAddr),
-              amount: parseFloat(amount),
-            })
-            .then(() => hide);
-        } else {
-          Alert.alert("Error", "Transfer functionality is not available.");
-        }
-      }}
-      submitLabel="Send"
-      submitDisabled={!srcAddr || !amount}
-    >
-      <View style={{ padding: 20 }}>
-        <Text>
-          Are you sure you want to send {amount} SOL to {destAddr}?
-        </Text>
-      </View>
-    </AppModal>
-  )
-
 }
 
 const styles = StyleSheet.create({

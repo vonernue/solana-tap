@@ -7,6 +7,7 @@ import { useFocusEffect } from "@react-navigation/native"; // Import useFocusEff
 
 import { useAuthorization } from "../utils/useAuthorization";
 import { AppModal } from "../components/ui/app-modal";
+import { BottomAppModal } from "../components/ui/bottom-modal";
 import { PublicKey } from "@solana/web3.js";
 
 import { useTransferSol, useTransferToken } from "../components/account/account-data-access";
@@ -145,7 +146,7 @@ export function SolConfirmationModal ({
   const transferToken = useTransferToken({ srcAddress: srcAddr });
 
   return (
-    <AppModal
+    <BottomAppModal
       title="Send SOL"
       hide={hide}
       show={show}
@@ -174,10 +175,13 @@ export function SolConfirmationModal ({
     >
       <View style={{ padding: 20 }}>
         <Text>
-          Are you sure you want to send {amount} {token} to {destAddr}?
+          Are you sure you want to send{" "}
+          <Text style={{ fontWeight: "bold" }}>{amount}</Text>{" "}
+          <Text style={{ fontWeight: "bold" }}>{token}</Text> to{" "}
+          <Text style={{ fontWeight: "bold" }}>{destAddr}</Text>?
         </Text>
       </View>
-    </AppModal>
+    </BottomAppModal>
   )
 
 }

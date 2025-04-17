@@ -2,7 +2,9 @@ import React, { useState } from "react";
 import { View, StyleSheet, Alert, TouchableOpacity, Image } from "react-native";
 import { Text, Button, TextInput, Menu } from "react-native-paper";
 import { useAuthorization } from "../utils/useAuthorization";
+import { ActivityIndicator, MD2Colors } from 'react-native-paper';
 import { AppModal } from "../components/ui/app-modal";
+import { BottomAppModal } from "../components/ui/bottom-modal";
 import {
   HCESession,
   HCESessionContext,
@@ -10,7 +12,7 @@ import {
   NFCTagType4,
 } from "react-native-hce";
 
-async function startHCE(message: string, modalOpen: () => void) {
+async function startHCE(message: string, readHandler: () => void) {
   try {
     const tag = new NFCTagType4({
       type: NFCTagType4NDEFContentType.Text,
@@ -24,7 +26,7 @@ async function startHCE(message: string, modalOpen: () => void) {
     console.log("HCE tag set:", tag);
     await session.setEnabled(true);
     session.on(HCESession.Events.HCE_STATE_READ, () => {
-      modalOpen();
+      readHandler();
     });
   } catch (error) {
     console.error("Error starting HCE:", error);
@@ -62,9 +64,13 @@ export default function ReceiveScreen() {
     };
     console.log("Request data:", JSON.stringify(requestData));
     try {
-      await startHCE(JSON.stringify(requestData), () => {
-        setWaitTxModalVisible(true);
-      });
+      await startHCE(
+        JSON.stringify(requestData), 
+        () => {
+          setRequestModalVisible(false);
+          setWaitTxModalVisible(true);
+        }
+      );
       setRequestModalVisible(true);
     } catch (error) {
       Alert.alert("Error", "Failed to start NFC emulation.");
@@ -123,29 +129,33 @@ export default function ReceiveScreen() {
           Request
         </Button>
       </View>
-      <AppModal
+      <BottomAppModal
         title={`Request ${amount} ${selectedToken}`}
         hide={() => setRequestModalVisible(false)}
         show={requestModalVisible}
       >
         <View style={{ padding: 20 }}>
-          <Text>Tap your phone with another device to send {amount} {selectedToken}.</Text>
+          <Text style={styles.bottomModalText}>Tap your phone with another device to send {amount} {selectedToken}.</Text>
         </View>
-      </AppModal>
-      <AppModal
-        title={`Waiting Transaction...`}
+      </BottomAppModal>
+      <BottomAppModal
+        title={`Waiting Transaction`}
         hide={() => setWaitTxModalVisible(false)}
         show={waitTxModalVisible}
       >
-        <View style={{ padding: 20 }}>
-          <Text>Waiting for transaction to be completed...</Text>
+        <View style={{ padding: 10 }}>
+          <ActivityIndicator size="large" animating={true} />
         </View>
-      </AppModal>
+      </BottomAppModal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  bottomModalText: {
+    fontSize: 14,
+    textAlign: "center",
+  },
   screenContainer: {
     flex: 1,
     justifyContent: "center",

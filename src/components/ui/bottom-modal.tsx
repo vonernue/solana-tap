@@ -1,7 +1,7 @@
 import { ViewStyle, View, StyleSheet } from "react-native";
 import { Modal, Text, Button, Portal, useTheme } from "react-native-paper";
 
-interface AppModalProps {
+interface BottomAppModalProps {
   children: React.ReactNode;
   title: string;
   hide: () => void;
@@ -9,18 +9,17 @@ interface AppModalProps {
   submit?: () => void;
   submitDisabled?: boolean;
   submitLabel?: string;
-  contentContainerStyle?: ViewStyle;
 }
 
-export function AppModal({
+export function BottomAppModal({
   children,
   title,
   hide,
   show,
   submit,
   submitDisabled,
-  submitLabel = "Save", // Defaulting submitLabel to "Save" here
-}: AppModalProps) {
+  submitLabel = "Save",
+}: BottomAppModalProps) {
   const theme = useTheme();
   return (
     <Portal>
@@ -61,23 +60,27 @@ export function AppModal({
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    marginLeft: 20,
-    marginRight: 20,
-    borderRadius: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   title: {
-    fontSize: 20,
+    fontSize:20,
     fontWeight: "bold",
-    marginBottom: 16, // Adjust spacing as needed
+    marginBottom: 16,
+    textAlign: "center",
   },
   action: {
-    marginTop: 16, // Adjust spacing as needed
+    marginTop: 16,
   },
   buttonGroup: {
     flexDirection: "row",
-    justifyContent: "space-around", // Adjust based on your design requirements
+    justifyContent: "space-around",
   },
   button: {
-    margin: 4, // Adjust as needed
+    margin: 4,
   },
 });
