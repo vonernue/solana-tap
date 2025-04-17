@@ -8,11 +8,27 @@ import {
   TransactionMessage,
   TransactionSignature,
   VersionedTransaction,
+  ParsedAccountData
 } from "@solana/web3.js";
-import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { 
+  TOKEN_2022_PROGRAM_ID, 
+  TOKEN_PROGRAM_ID, 
+  createTransferInstruction,
+  createAssociatedTokenAccountIdempotentInstruction, 
+  getAssociatedTokenAddressSync
+} from "@solana/spl-token";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useConnection } from "../../utils/ConnectionProvider";
 import { useMobileWallet } from "../../utils/useMobileWallet";
+
+
+
+async function getNumberDecimals(mintAddress: PublicKey, connection: Connection):Promise<number> {
+  const info = await connection.getParsedAccountInfo(mintAddress);
+  const result = (info.value?.data as ParsedAccountData).parsed.info.decimals as number;
+  return result;
+}
+
 
 export function useGetBalance({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
@@ -128,6 +144,69 @@ export function useTransferSol({ address }: { address: PublicKey }) {
   });
 }
 
+export function useTransferToken({ srcAddress }: { srcAddress: PublicKey }) {
+  const { connection } = useConnection();
+  const client = useQueryClient();
+  const wallet = useMobileWallet();
+
+  return useMutation({
+    mutationKey: [
+      "transfer-token",
+      { endpoint: connection.rpcEndpoint, srcAddress },
+    ],
+    mutationFn: async (input: {mintAddress: PublicKey; destAddress: PublicKey; amount: number}) => {
+      let signature: TransactionSignature = "";
+      try {
+        const { transaction, latestBlockhash, minContextSlot } = await createTokenTransferTransaction({
+          mintAddress: input.mintAddress,
+          srcAddress,
+          destAddress: input.destAddress,
+          amount: input.amount * 10 ** await getNumberDecimals(input.mintAddress, connection),
+          connection
+        });
+        console.log("Here")
+        // Send transaction and await for signature
+        signature = await wallet.signAndSendTransaction(transaction, minContextSlot);
+
+        // Send transaction and await for signature
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          "confirmed"
+        );
+
+        console.log(signature);
+        return signature;
+      } catch (error: unknown) {
+        console.log("error", `Transaction failed! ${error}`, signature);
+
+        return;
+      }
+    },
+    onSuccess: (signature) => {
+      if (signature) {
+        console.log(signature);
+      }
+      return Promise.all([
+        client.invalidateQueries({
+          queryKey: [
+            "get-balance",
+            { endpoint: connection.rpcEndpoint, srcAddress },
+          ],
+        }),
+        client.invalidateQueries({
+          queryKey: [
+            "get-signatures",
+            { endpoint: connection.rpcEndpoint, srcAddress },
+          ],
+        }),
+      ]);
+    },
+    onError: (error) => {
+      console.error(`Transaction failed! ${error}`);
+    },
+  });
+}
+
 export function useRequestAirdrop({ address }: { address: PublicKey }) {
   const { connection } = useConnection();
   const client = useQueryClient();
@@ -164,6 +243,66 @@ export function useRequestAirdrop({ address }: { address: PublicKey }) {
       ]);
     },
   });
+}
+
+async function createTokenTransferTransaction({
+  mintAddress, 
+  srcAddress, 
+  destAddress, 
+  amount,
+  connection
+}: {
+  mintAddress: PublicKey, 
+  srcAddress: PublicKey, 
+  destAddress: PublicKey, 
+  amount: number,
+  connection: Connection
+}) {
+  const {
+    context: {slot: minContextSlot},
+    value: latestBlockhash
+  } = await connection.getLatestBlockhashAndContext();
+
+  const srcTokenAccount = getAssociatedTokenAddressSync(
+    mintAddress,
+    srcAddress,
+  );
+
+  const destTokenAccount = getAssociatedTokenAddressSync(
+    mintAddress,
+    destAddress,
+  );
+
+  const instructions = [
+    createAssociatedTokenAccountIdempotentInstruction(
+      srcAddress,
+      destTokenAccount,
+      destAddress,
+      mintAddress,
+    ),
+    createTransferInstruction(
+      srcTokenAccount,
+      destTokenAccount,
+      srcAddress,
+      amount
+    )
+  ]
+
+  // Create a new TransactionMessage with version and compile it to legacy
+  const messageLegacy = new TransactionMessage({
+    payerKey: srcAddress,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions,
+  }).compileToLegacyMessage();
+
+  // Create a new VersionedTransaction which supports legacy and v0
+  const transaction = new VersionedTransaction(messageLegacy);
+
+  return {
+    transaction,
+    latestBlockhash,
+    minContextSlot,
+  };
 }
 
 async function createTransaction({

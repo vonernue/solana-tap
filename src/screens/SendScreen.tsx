@@ -9,7 +9,11 @@ import { useAuthorization } from "../utils/useAuthorization";
 import { AppModal } from "../components/ui/app-modal";
 import { PublicKey } from "@solana/web3.js";
 
-import { useTransferSol } from "../components/account/account-data-access";
+import { useTransferSol, useTransferToken } from "../components/account/account-data-access";
+
+const tokenMintAddresses = {
+  "USDC": new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr")
+}
 
 export function SendScreen() {
   const { selectedAccount } = useAuthorization();
@@ -138,6 +142,7 @@ export function SolConfirmationModal ({
   token: string;
 })  {
   const transferSol = useTransferSol({ address: srcAddr });
+  const transferToken = useTransferToken({ srcAddress: srcAddr });
 
   return (
     <AppModal
@@ -145,10 +150,18 @@ export function SolConfirmationModal ({
       hide={hide}
       show={show}
       submit={() => {
-        if (transferSol) {
+        if (transferSol && token === "SOL") {
           transferSol
             .mutateAsync({
               destination: new PublicKey(destAddr),
+              amount: parseFloat(amount),
+            })
+            .then(() => hide);
+        } else if (transferSol && token === "USDC") {
+          transferToken
+            .mutateAsync({
+              mintAddress: tokenMintAddresses["USDC"],
+              destAddress: new PublicKey(destAddr),
               amount: parseFloat(amount),
             })
             .then(() => hide);
