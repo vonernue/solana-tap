@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, StyleSheet, Alert, TouchableOpacity, Image } from "react-native";
 import { Text, Button, TextInput, Menu } from "react-native-paper";
 import { useAuthorization } from "../utils/useAuthorization";
 import { ActivityIndicator, MD2Colors } from 'react-native-paper';
+import { useFocusEffect } from "@react-navigation/native";
 import { AppModal } from "../components/ui/app-modal";
 import { BottomAppModal } from "../components/ui/bottom-modal";
 import {
@@ -21,7 +22,6 @@ async function startHCE(message: string, readHandler: () => void) {
     });
 
     let session = await HCESession.getInstance();
-
     await session.setApplication(tag);
     console.log("HCE tag set:", tag);
     await session.setEnabled(true);
@@ -50,6 +50,25 @@ export default function ReceiveScreen() {
       icon: require("../../assets/usdc-icon.png"),
     },
   ];
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        // Turn off HCE and clean up NFC resources when the screen is not active
+        const disableHCE = async () => {
+          try {
+            const session = await HCESession.getInstance();
+            await session.setEnabled(false);
+            console.log("HCE disabled");
+          } catch (error) {
+            console.error("Failed to disable HCE:", error);
+          }
+        };
+  
+        disableHCE();
+      };
+    }, [])
+  );
 
   const handleRequest = async () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
