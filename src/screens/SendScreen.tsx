@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { StyleSheet, View, Alert } from "react-native";
+import { StyleSheet, View, Alert, Linking } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import NfcManager, { NfcTech } from "react-native-nfc-manager";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -20,7 +20,9 @@ export function SendScreen() {
   const { selectedAccount } = useAuthorization();
   const [nfcEnabled, setNfcEnabled] = useState(false);
   const [showTransferSolModal, setShowTransferSolModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [destinationAddress, setDestinationAddress] = useState("");
+  const [txHash, setTxHash] = useState("");
   const [amount, setAmount] = useState("");
   const [token, setToken] = useState("SOL");
   const theme = useTheme();
@@ -67,7 +69,7 @@ export function SendScreen() {
         setAmount(amount);
         setToken(token);
         setShowTransferSolModal(true);
-        break; // Exit the loop after successfully reading a tag
+        continue; // Exit the loop after successfully reading a tag
       }
     } catch (ex) {
       console.log("NFC read error", ex);
@@ -121,8 +123,38 @@ export function SendScreen() {
           destAddr={destinationAddress}
           amount={amount}
           token={token}
+          setTxHash={setTxHash}
+          successShow={() => setShowSuccessModal(true)}
+          failureShow={() => {
+            Alert.alert("Error", "Transaction failed!");
+            setShowTransferSolModal(false);
+          }}
         />
-      ) : null}
+        ) : null}
+      <BottomAppModal
+        title="Transaction Success"
+        hide={() => setShowSuccessModal(false)}
+        show={showSuccessModal}
+        submit={async () => {
+          setDestinationAddress("");
+          setAmount("");
+          setToken("");
+          if (txHash) {
+            const solscanUrl = `https://solscan.io/tx/${txHash}?cluster=devnet`;
+            Linking.openURL(solscanUrl); // Open the transaction URL in the browser
+          }
+        }}
+        submitLabel="View on explorer"
+      >
+        <View style={{ padding: 20 }}>
+          <Text>
+            Transaction successful! You have sent{" "}
+            <Text style={{ fontWeight: "bold" }}>{amount}</Text>{" "}
+            <Text style={{ fontWeight: "bold" }}>{token}</Text> to{" "}
+            <Text style={{ fontWeight: "bold" }}>{destinationAddress}</Text>?
+          </Text>
+        </View>
+      </BottomAppModal>
     </>
   );
 }
@@ -133,7 +165,10 @@ export function SolConfirmationModal ({
   srcAddr,
   destAddr,
   amount,
-  token
+  token,
+  setTxHash,
+  successShow,
+  failureShow,
 }: {
   hide: () => void;
   show: boolean;
@@ -141,6 +176,9 @@ export function SolConfirmationModal ({
   destAddr: string;
   amount: string;
   token: string;
+  setTxHash: (hash: string) => void;
+  successShow: () => void;
+  failureShow: () => void;
 })  {
   const transferSol = useTransferSol({ address: srcAddr });
   const transferToken = useTransferToken({ srcAddress: srcAddr });
@@ -150,24 +188,34 @@ export function SolConfirmationModal ({
       title="Send SOL"
       hide={hide}
       show={show}
-      submit={() => {
+      submit={async () => {
+        let hash = ""
         if (transferSol && token === "SOL") {
-          transferSol
+          const result = await transferSol
             .mutateAsync({
               destination: new PublicKey(destAddr),
               amount: parseFloat(amount),
-            })
-            .then(() => hide);
+            });
+          hash = result || ""; // Assign an empty string if result is undefined
         } else if (transferSol && token === "USDC") {
-          transferToken
+          const result = await transferToken
             .mutateAsync({
               mintAddress: tokenMintAddresses["USDC"],
               destAddress: new PublicKey(destAddr),
               amount: parseFloat(amount),
             })
-            .then(() => hide);
+          hash = result || ""; // Assign an empty string if result is undefined
         } else {
           Alert.alert("Error", "Transfer functionality is not available.");
+        }
+        hide();
+        if (hash) {
+          // Alert.alert("Success", `Transaction successful! Hash: ${hash}`);
+          setTxHash(hash);
+          successShow();
+        }else {
+          // Alert.alert("Error", "Transaction failed!");
+          failureShow();
         }
       }}
       submitLabel="Send"

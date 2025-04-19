@@ -136,7 +136,7 @@ export function useTransferSol({ address }: { address: PublicKey }) {
             { endpoint: connection.rpcEndpoint, address },
           ],
         }),
-      ]);
+      ]).then(() => signature);
     },
     onError: (error) => {
       console.error(`Transaction failed! ${error}`);
@@ -164,7 +164,6 @@ export function useTransferToken({ srcAddress }: { srcAddress: PublicKey }) {
           amount: input.amount * 10 ** await getNumberDecimals(input.mintAddress, connection),
           connection
         });
-        console.log("Here")
         // Send transaction and await for signature
         signature = await wallet.signAndSendTransaction(transaction, minContextSlot);
 
@@ -198,8 +197,8 @@ export function useTransferToken({ srcAddress }: { srcAddress: PublicKey }) {
             "get-signatures",
             { endpoint: connection.rpcEndpoint, srcAddress },
           ],
-        }),
-      ]);
+        })
+      ]).then(() => signature);
     },
     onError: (error) => {
       console.error(`Transaction failed! ${error}`);
