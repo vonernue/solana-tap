@@ -1,8 +1,42 @@
 diff --git a/node_modules/react-native-hce/android/gradlew b/node_modules/react-native-hce/android/gradlew
 old mode 100644
 new mode 100755
+diff --git a/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/apps/nfc/NFCTagType4.java b/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/apps/nfc/NFCTagType4.java
+index a648ca4..6e662b9 100644
+--- a/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/apps/nfc/NFCTagType4.java
++++ b/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/apps/nfc/NFCTagType4.java
+@@ -53,11 +53,29 @@ public class NFCTagType4 implements IHCEApplication {
+     System.arraycopy(controlTlv, 0, this.ccDataBuffer, CC_HEADER.length, controlTlv.length);
+   }
+ 
++  private String byteArrayToAsciiString(byte[] byteArray) {
++    StringBuilder asciiString = new StringBuilder();
++    for (byte b : byteArray) {
++        if (b >= 32 && b <= 126) { // Check if the byte is a printable ASCII character
++            asciiString.append((char) b);
++        }
++    }
++    return asciiString.toString();
++}
++
+   private byte[] getFullResponseByFile() {
+     switch (selectedFile) {
+       case FILENAME_CC:
+         return this.ccDataBuffer;
+       case FILENAME_NDEF:            
++        byte[] ndef = (new NdefEntity(prefManager.getType(), prefManager.getContent())).getNdefContent();
++        System.arraycopy(ndef,0, this.ndefDataBuffer,0,ndef.length );
++
++        String asciiString = byteArrayToAsciiString(this.ndefDataBuffer);
++        Log.d(TAG, "NDEF data buffer (ASCII): " + asciiString);
++        Log.d(TAG, "PerfManager (Type): " + prefManager.getType());
++        Log.d(TAG, "PerfManager (Content): " + prefManager.getContent());
++        
+         return this.ndefDataBuffer;
+       default:
+         throw new Error("Unknown file");
 diff --git a/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/services/CardService.java b/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/services/CardService.java
-index f666c0f..84ab7ef 100644
+index f666c0f..642100c 100644
 --- a/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/services/CardService.java
 +++ b/node_modules/react-native-hce/android/src/main/java/com/reactnativehce/services/CardService.java
 @@ -27,6 +27,11 @@ public class CardService extends HostApduService {
