@@ -12,8 +12,13 @@ import {
   NFCTagType4NDEFContentType,
   NFCTagType4,
 } from "react-native-hce";
+import { useConnection } from "../utils/ConnectionProvider";
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
-async function startHCE(message: string, readHandler: () => void) {
+async function startHCE(
+  message: string,
+  readHandler: () => void
+) {
   try {
     const tag = new NFCTagType4({
       type: NFCTagType4NDEFContentType.Text,
@@ -25,7 +30,15 @@ async function startHCE(message: string, readHandler: () => void) {
     await session.setApplication(tag);
     console.log("HCE tag set:", tag);
     await session.setEnabled(true);
-    session.on(HCESession.Events.HCE_STATE_READ, () => {
+
+    let isTagRead = false; // Local variable to track the read state
+
+    session.on(HCESession.Events.HCE_STATE_READ,() => {
+      if (isTagRead) {
+        console.log("Tag already read, ignoring...");
+        return;
+      }
+      isTagRead = true;
       readHandler();
     });
   } catch (error) {
@@ -34,13 +47,96 @@ async function startHCE(message: string, readHandler: () => void) {
   }
 }
 
+async function txPolling(connection: Connection, targetAddress: PublicKey) {
+  let lastSignature = await connection.getSignaturesForAddress(targetAddress, {
+    limit: 1,
+  }, "confirmed").then((signatures) => {
+    if (signatures.length > 0) {
+      return signatures[0].signature;
+    }
+    return null;
+  });
+
+  console.log(`Last signature: ${lastSignature}`);
+
+  let shouldStop = false; // Flag to control polling
+
+  const fetchTx = async (lastSignature: string | null) => {
+    if (shouldStop) return; // Stop polling if the flag is set
+
+    const signatures = await connection.getSignaturesForAddress(targetAddress, {
+      until: lastSignature ?? undefined,
+      limit: 10,
+    }, "confirmed");
+
+    console.log(`signatures: ${JSON.stringify(signatures)}`);
+    for (const sigInfo of signatures.reverse()) {
+      const tx = await connection.getTransaction(sigInfo.signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+
+      console.log(`Transaction: ${sigInfo.signature}`);
+
+      if (tx && tx.meta && tx.meta.postBalances && tx.meta.preBalances) {
+        const accountKeys = tx.transaction.message.getAccountKeys().staticAccountKeys.map(k => k.toBase58());
+        const targetIndex = accountKeys.indexOf(targetAddress.toBase58());
+
+        if (targetIndex !== -1) {
+          const balanceDiff = (tx.meta.postBalances[targetIndex] - tx.meta.preBalances[targetIndex]) / LAMPORTS_PER_SOL;
+
+          if (balanceDiff > 0) {
+            // Try to find the sender (the one who lost SOL)
+            let sender = null;
+            for (let i = 0; i < tx.meta.preBalances.length; i++) {
+              if (
+                tx.meta.preBalances[i] > tx.meta.postBalances[i] &&
+                accountKeys[i] !== targetAddress.toBase58()
+              ) {
+                sender = accountKeys[i];
+                break;
+              }
+            }
+
+            console.log(`💸 ${sender} sent ${balanceDiff} SOL to ${targetAddress.toBase58()}`);
+            console.log(`🔗 https://solscan.io/tx/${sigInfo.signature}`);
+
+            shouldStop = true; // Stop polling after finding a transaction
+            break;
+          }
+        }
+      }
+
+      lastSignature = sigInfo.signature;
+    }
+
+  };
+
+  setInterval(() => fetchTx(lastSignature), 2000);
+
+  // fetchTx(lastSignature);
+}
+
 export default function ReceiveScreen() {
   const { selectedAccount } = useAuthorization();
   const [requestModalVisible, setRequestModalVisible] = useState(false);
   const [waitTxModalVisible, setWaitTxModalVisible] = useState(false);
   const [amount, setAmount] = useState("");
   const [selectedToken, setSelectedToken] = useState("SOL");
+  const [tagRead, setTagRead] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+
+  const { connection } = useConnection();
+  
+  
+
+  if (!selectedAccount) {
+    return (
+      <View style={styles.screenContainer}>
+        <Text style={styles.label}>Please Conneect Your Wallet</Text>
+      </View>
+    );
+  }
 
   const tokens = [
     { label: "SOL", value: "SOL", icon: require("../../assets/sol-icon.png") },
@@ -81,15 +177,18 @@ export default function ReceiveScreen() {
       amount: Number(amount),
       address: selectedAccount?.publicKey,
     };
-    console.log("Request data:", JSON.stringify(requestData));
+
+    setTagRead(false);
     try {
       await startHCE(
         JSON.stringify(requestData), 
         () => {
           setRequestModalVisible(false);
           setWaitTxModalVisible(true);
+          txPolling(connection, selectedAccount?.publicKey);
         }
       );
+      // await txPolling(connection, selectedAccount?.publicKey);
       setRequestModalVisible(true);
     } catch (error) {
       Alert.alert("Error", "Failed to start NFC emulation.");
