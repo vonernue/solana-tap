@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, Alert, TouchableOpacity, Image } from "react-native";
+import { View, StyleSheet, Alert, TouchableOpacity, Image, Linking } from "react-native";
 import { Text, Button, TextInput, Menu } from "react-native-paper";
 import { useAuthorization } from "../utils/useAuthorization";
 import { ActivityIndicator, MD2Colors } from 'react-native-paper';
@@ -47,7 +47,16 @@ async function startHCE(
   }
 }
 
-async function txPolling(connection: Connection, targetAddress: PublicKey) {
+async function txPolling(
+  connection: Connection, 
+  targetAddress: PublicKey, 
+  setWaitTxModalVisible: (visible: boolean) => void,
+  setReceivedModal: (visible: boolean) => void,
+  setReceivedAmount: (amount: string) => void,
+  setReceivedToken: (token: string) => void,
+  setSender: (sender: string) => void,
+  setTxHash: (hash: string) => void
+) {
   let lastSignature = await connection.getSignaturesForAddress(targetAddress, {
     limit: 1,
   }, "confirmed").then((signatures) => {
@@ -97,10 +106,18 @@ async function txPolling(connection: Connection, targetAddress: PublicKey) {
                 break;
               }
             }
-
+            if (!sender) {
+              console.log("Sender not found");
+              continue;
+            }
+            setReceivedAmount(balanceDiff.toString());
+            setReceivedToken("SOL");
+            setSender(sender);
+            setTxHash(sigInfo.signature);
             console.log(`💸 ${sender} sent ${balanceDiff} SOL to ${targetAddress.toBase58()}`);
             console.log(`🔗 https://solscan.io/tx/${sigInfo.signature}`);
-
+            setWaitTxModalVisible(false); // Close the waiting modal
+            setReceivedModal(true); // Show the received modal
             shouldStop = true; // Stop polling after finding a transaction
             break;
           }
@@ -123,8 +140,12 @@ export default function ReceiveScreen() {
   const [waitTxModalVisible, setWaitTxModalVisible] = useState(false);
   const [amount, setAmount] = useState("");
   const [selectedToken, setSelectedToken] = useState("SOL");
-  const [tagRead, setTagRead] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [receivedModal, setReceivedModal] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState("");
+  const [receivedToken, setReceivedToken] = useState("SOL");
+  const [sender, setSender] = useState("");
+  const [txHash, setTxHash] = useState("");
 
   const { connection } = useConnection();
   
@@ -178,14 +199,22 @@ export default function ReceiveScreen() {
       address: selectedAccount?.publicKey,
     };
 
-    setTagRead(false);
     try {
       await startHCE(
         JSON.stringify(requestData), 
         () => {
           setRequestModalVisible(false);
           setWaitTxModalVisible(true);
-          txPolling(connection, selectedAccount?.publicKey);
+          txPolling(
+            connection, 
+            selectedAccount?.publicKey, 
+            setWaitTxModalVisible,
+            setReceivedModal,
+            setReceivedAmount,
+            setReceivedToken,
+            setSender,
+            setTxHash
+          );
         }
       );
       // await txPolling(connection, selectedAccount?.publicKey);
@@ -248,7 +277,7 @@ export default function ReceiveScreen() {
         </Button>
       </View>
       <BottomAppModal
-        title={`Request ${amount} ${selectedToken}`}
+        title={`Request ${selectedToken}`}
         hide={() => setRequestModalVisible(false)}
         show={requestModalVisible}
       >
@@ -263,6 +292,27 @@ export default function ReceiveScreen() {
       >
         <View style={{ padding: 10 }}>
           <ActivityIndicator size="large" animating={true} />
+        </View>
+      </BottomAppModal>
+      <BottomAppModal
+        title={`Transaction Success`}
+        hide={() => setReceivedModal(false)}
+        show={receivedModal}
+        submit={async () => {
+          if (txHash) {
+            const solscanUrl = `https://solscan.io/tx/${txHash}?cluster=devnet`;
+            Linking.openURL(solscanUrl); // Open the transaction URL in the browser
+          }
+        }}
+        submitLabel="View on explorer"
+      >
+        <View style={{ padding: 20 }}>
+          <Text style={styles.bottomModalText}>
+            You received {" "}
+            <Text style={{ fontWeight: "bold" }}>{receivedAmount} {receivedToken}</Text>
+            {" "} from {" "}
+            <Text style={{ fontWeight: "bold" }}>{sender}</Text>
+          </Text>
         </View>
       </BottomAppModal>
     </>
