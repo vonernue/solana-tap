@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, StyleSheet, Alert, TouchableOpacity, Image, Linking } from "react-native";
 import { Text, Button, TextInput, Menu } from "react-native-paper";
 import { useAuthorization } from "../utils/useAuthorization";
@@ -146,10 +146,46 @@ export default function ReceiveScreen() {
   const [receivedToken, setReceivedToken] = useState("SOL");
   const [sender, setSender] = useState("");
   const [txHash, setTxHash] = useState("");
-
   const { connection } = useConnection();
+
+  // New state for token prices; default USDC is 1 USD
+  const [tokenPrices, setTokenPrices] = useState({ SOL: 0, USDC: 1 });
+
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const response = await fetch(
+          "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id=3408,5426",
+          {
+            headers: {
+              "X-CMC_PRO_API_KEY": process.env.EXPO_PUBLIC_CMC_APIKEY || "",
+            },
+          }
+        );
+        const data = await response.json();
+        // Update token prices using CoinMarketCap response:
+        // data.data.SOL.quote.USD.price and data.data.USDC.quote.USD.price
+        // console.log("Token prices:", data);
+        setTokenPrices({
+          SOL: data["data"]["5426"]["quote"]["USD"]["price"],
+          USDC: data["data"]["3408"]["quote"]["USD"]["price"],
+        });
+        // console.log("Updated token prices:", tokenPrices);
+      } catch (error) {
+        console.error("Error fetching token prices:", error);
+      }
+    };
   
-  
+    // Fetch immediately and every 60 seconds
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Use the fetched price for the current selected token
+  const currentPrice = selectedToken === "SOL" ? tokenPrices.SOL : tokenPrices.USDC;
+  const estimatedUsdValue =
+    Number(amount) > 0 ? (Number(amount) * currentPrice).toFixed(2) : "0.00";
 
   if (!selectedAccount) {
     return (
@@ -181,7 +217,7 @@ export default function ReceiveScreen() {
             console.error("Failed to disable HCE:", error);
           }
         };
-  
+
         disableHCE();
       };
     }, [])
@@ -200,24 +236,20 @@ export default function ReceiveScreen() {
     };
 
     try {
-      await startHCE(
-        JSON.stringify(requestData), 
-        () => {
-          setRequestModalVisible(false);
-          setWaitTxModalVisible(true);
-          txPolling(
-            connection, 
-            selectedAccount?.publicKey, 
-            setWaitTxModalVisible,
-            setReceivedModal,
-            setReceivedAmount,
-            setReceivedToken,
-            setSender,
-            setTxHash
-          );
-        }
-      );
-      // await txPolling(connection, selectedAccount?.publicKey);
+      await startHCE(JSON.stringify(requestData), () => {
+        setRequestModalVisible(false);
+        setWaitTxModalVisible(true);
+        txPolling(
+          connection,
+          selectedAccount?.publicKey,
+          setWaitTxModalVisible,
+          setReceivedModal,
+          setReceivedAmount,
+          setReceivedToken,
+          setSender,
+          setTxHash
+        );
+      });
       setRequestModalVisible(true);
     } catch (error) {
       Alert.alert("Error", "Failed to start NFC emulation.");
@@ -230,47 +262,56 @@ export default function ReceiveScreen() {
       <View style={styles.screenContainer}>
         <Text style={styles.label}>Enter Amount and Select Token:</Text>
         <View style={styles.rowContainer}>
-          <TextInput
-            style={[styles.input, styles.flexInput]}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="Enter amount"
-          />
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenuVisible(false)}
-            anchor={
-              <TouchableOpacity
-                style={[styles.pickerButton, styles.flexPicker]}
-                onPress={() => setMenuVisible(true)}
-              >
-                <Image
-                  source={
-                    tokens.find((token) => token.value === selectedToken)?.icon
+          {/* TextInput & estimated USD value */}
+          <View style={{ flex: 2 }}>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="Enter amount"
+            />
+            {amount !== "" && (
+              <Text style={styles.estimatedUsdText}>
+                ~${estimatedUsdValue}
+              </Text>
+            )}
+          </View>
+          {/* Token dropdown */}
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <Menu
+              visible={menuVisible}
+              onDismiss={() => setMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setMenuVisible(true)}
+                >
+                  <Image
+                    source={tokens.find((token) => token.value === selectedToken)?.icon}
+                    style={styles.tokenIcon}
+                  />
+                  <Text>{selectedToken}</Text>
+                </TouchableOpacity>
+              }
+            >
+              {tokens.map((token) => (
+                <Menu.Item
+                  key={token.value}
+                  onPress={() => {
+                    setSelectedToken(token.value);
+                    setMenuVisible(false);
+                  }}
+                  title={
+                    <View style={styles.menuItem}>
+                      <Image source={token.icon} style={styles.tokenIcon} />
+                      <Text>{token.label}</Text>
+                    </View>
                   }
-                  style={styles.tokenIcon}
                 />
-                <Text>{selectedToken}</Text>
-              </TouchableOpacity>
-            }
-          >
-            {tokens.map((token) => (
-              <Menu.Item
-                key={token.value}
-                onPress={() => {
-                  setSelectedToken(token.value);
-                  setMenuVisible(false);
-                }}
-                title={
-                  <View style={styles.menuItem}>
-                    <Image source={token.icon} style={styles.tokenIcon} />
-                    <Text>{token.label}</Text>
-                  </View>
-                }
-              />
-            ))}
-          </Menu>
+              ))}
+            </Menu>
+          </View>
         </View>
         <Button mode="contained" onPress={handleRequest} style={styles.button}>
           Request
@@ -372,5 +413,11 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 16,
+  },
+  estimatedUsdText: {
+    fontSize: 14,
+    textAlign: "left",
+    marginTop: 4,
+    color: "#555",
   },
 });
