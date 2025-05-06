@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 import { Appbar, useTheme } from "react-native-paper";
-import { TopBarWalletButton, TopBarWalletMenu } from "./top-bar-ui";
+import { TopBarClusterButton, TopBarSettingsButton, TopBarWalletMenu } from "./top-bar-ui";
 import { useNavigation } from "@react-navigation/core";
 
 export function TopBar() {
@@ -10,14 +10,8 @@ export function TopBar() {
   return (
     <Appbar.Header mode="small" style={styles.topBar}>
       <TopBarWalletMenu />
-
-      <Appbar.Action
-        icon="cog"
-        mode="contained-tonal"
-        onPress={() => {
-          navigation.navigate("Settings");
-        }}
-      />
+      <TopBarClusterButton />
+      <TopBarSettingsButton />
     </Appbar.Header>
   );
 }

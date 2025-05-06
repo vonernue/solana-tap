@@ -30,6 +30,19 @@ export function TopBarWalletButton({
   );
 }
 
+export function TopBarClusterButton() {
+  const navigation = useNavigation();
+  return (
+    <IconButton
+      icon="web"
+      mode="contained-tonal"
+      onPress={() => {
+        navigation.navigate("Cluster");
+      }}
+    />
+  );
+}
+
 export function TopBarSettingsButton() {
   const navigation = useNavigation();
   return (

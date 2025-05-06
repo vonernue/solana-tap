@@ -34,6 +34,7 @@ import {
 
 type RootStackParamList = {
   Home: undefined;
+  Cluster: undefined;
   Settings: undefined;
   // 🔥 Your screens go here
 };
@@ -55,6 +56,7 @@ const AppStack = () => {
         component={HomeNavigator}
         options={{ headerShown: false }}
       />
+      <Stack.Screen name="Cluster" component={Screens.ClusterScreen} />
       <Stack.Screen name="Settings" component={Screens.SettingsScreen} />
       {/** 🔥 Your screens go here */}
     </Stack.Navigator>
