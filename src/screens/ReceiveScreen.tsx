@@ -14,6 +14,7 @@ import {
 } from "react-native-hce";
 import { useConnection } from "../utils/ConnectionProvider";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function startHCE(
   message: string,
@@ -35,7 +36,7 @@ async function startHCE(
 
     session.on(HCESession.Events.HCE_STATE_READ,() => {
       if (isTagRead) {
-        console.log("Tag already read, ignoring...");
+        // console.log("Tag already read, ignoring...");
         return;
       }
       isTagRead = true;
@@ -151,6 +152,57 @@ export default function ReceiveScreen() {
   // New state for token prices; default USDC is 1 USD
   const [tokenPrices, setTokenPrices] = useState({ SOL: 0, USDC: 1 });
 
+  const [receivingMode, setReceivingMode] = useState<'wallet' | 'program'>('wallet');
+  const [selectedConfigAddress, setSelectedConfigAddress] = useState<string>('');
+
+  // Load settings when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadSettings = async () => {
+        try {
+          const mode = await AsyncStorage.getItem('receivingMode');
+          const config = await AsyncStorage.getItem('selectedConfig');
+          // console.log('Loading settings - Mode:', mode, 'Config:', config);
+          
+          if (mode) {
+            setReceivingMode(mode as 'wallet' | 'program');
+          }
+          if (config) {
+            setSelectedConfigAddress(config);
+          }
+        } catch (error) {
+          console.error('Error loading settings:', error);
+        }
+      };
+
+      loadSettings();
+    }, [])
+  );
+
+  // Add a listener for settings changes
+  useEffect(() => {
+    const checkSettings = async () => {
+      try {
+        const mode = await AsyncStorage.getItem('receivingMode');
+        const config = await AsyncStorage.getItem('selectedConfig');
+        // console.log('Settings changed - Mode:', mode, 'Config:', config);
+        
+        if (mode) {
+          setReceivingMode(mode as 'wallet' | 'program');
+        }
+        if (config) {
+          setSelectedConfigAddress(config);
+        }
+      } catch (error) {
+        console.error('Error checking settings:', error);
+      }
+    };
+
+    // Check settings every second
+    const interval = setInterval(checkSettings, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const fetchPrices = async () => {
       try {
@@ -229,26 +281,44 @@ export default function ReceiveScreen() {
       return;
     }
 
+    if (receivingMode === 'program' && !selectedConfigAddress) {
+      Alert.alert("Error", "Please select a distribution config in Settings.");
+      return;
+    }
+
+    console.log('Requesting with mode:', receivingMode);
+    console.log('Using address:', receivingMode === 'program' ? selectedConfigAddress : selectedAccount?.publicKey.toBase58());
+
     const requestData = {
       token: selectedToken,
       amount: Number(amount),
-      address: selectedAccount?.publicKey,
+      address: receivingMode === 'program' ? selectedConfigAddress : selectedAccount?.publicKey.toBase58(),
+      mode: receivingMode,
     };
 
     try {
       await startHCE(JSON.stringify(requestData), () => {
         setRequestModalVisible(false);
-        setWaitTxModalVisible(true);
-        txPolling(
-          connection,
-          selectedAccount?.publicKey,
-          setWaitTxModalVisible,
-          setReceivedModal,
-          setReceivedAmount,
-          setReceivedToken,
-          setSender,
-          setTxHash
-        );
+        if (receivingMode === 'wallet') {
+          setWaitTxModalVisible(true);
+          txPolling(
+            connection,
+            selectedAccount?.publicKey,
+            setWaitTxModalVisible,
+            setReceivedModal,
+            setReceivedAmount,
+            setReceivedToken,
+            setSender,
+            setTxHash
+          );
+        } else {
+          // For program mode, just show a success message
+          setReceivedAmount(amount);
+          setReceivedToken(selectedToken);
+          setSender("Distribution Program");
+          setTxHash("");
+          setReceivedModal(true);
+        }
       });
       setRequestModalVisible(true);
     } catch (error) {

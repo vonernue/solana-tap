@@ -20,12 +20,6 @@ import { AppNavigator } from "./src/navigators/AppNavigator";
 import { ClusterProvider } from "./src/components/cluster/cluster-data-access";
 import { HCESessionProvider } from "react-native-hce";
 
-import structuredClone from "@ungap/structured-clone";
-if (!("structuredClone" in globalThis)) {
-  globalThis.structuredClone = structuredClone;
-}
-
-
 const queryClient = new QueryClient();
 
 export default function App() {
