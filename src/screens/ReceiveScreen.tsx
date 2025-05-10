@@ -15,6 +15,7 @@ import {
 import { useConnection } from "../utils/ConnectionProvider";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAssociatedTokenAddress } from "@solana/spl-token";
 
 async function startHCE(
   message: string,
@@ -56,7 +57,8 @@ async function txPolling(
   setReceivedAmount: (amount: string) => void,
   setReceivedToken: (token: string) => void,
   setSender: (sender: string) => void,
-  setTxHash: (hash: string) => void
+  setTxHash: (hash: string) => void,
+  token: string = "SOL"
 ) {
   let lastSignature = await connection.getSignaturesForAddress(targetAddress, {
     limit: 1,
@@ -71,6 +73,22 @@ async function txPolling(
 
   let shouldStop = false; // Flag to control polling
 
+  // For USDC, record initial token account balance once
+  let usdcInitialBalance = 0;
+  let targetATA: PublicKey | undefined;
+  if (token === "USDC") {
+    const USDC_MINT = new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
+    targetATA = await getAssociatedTokenAddress(USDC_MINT, targetAddress);
+    try {
+      const balanceInfo = await connection.getTokenAccountBalance(targetATA, "confirmed");
+      usdcInitialBalance = balanceInfo.value.uiAmount || 0;
+      console.log(`Initial USDC balance: ${usdcInitialBalance}`);
+    } catch (error) {
+      console.error("Error fetching initial USDC balance:", error);
+      usdcInitialBalance = 0;
+    }
+  }
+
   const fetchTx = async (lastSignature: string | null) => {
     if (shouldStop) return; // Stop polling if the flag is set
 
@@ -79,47 +97,116 @@ async function txPolling(
       limit: 10,
     }, "confirmed");
 
-    console.log(`signatures: ${JSON.stringify(signatures)}`);
+    // console.log(`signatures: ${JSON.stringify(signatures)}`);
     for (const sigInfo of signatures.reverse()) {
       const tx = await connection.getTransaction(sigInfo.signature, {
         commitment: "confirmed",
         maxSupportedTransactionVersion: 0,
       });
 
-      console.log(`Transaction: ${sigInfo.signature}`);
+      // console.log(`Transaction: ${sigInfo.signature}`);
 
-      if (tx && tx.meta && tx.meta.postBalances && tx.meta.preBalances) {
-        const accountKeys = tx.transaction.message.getAccountKeys().staticAccountKeys.map(k => k.toBase58());
-        const targetIndex = accountKeys.indexOf(targetAddress.toBase58());
+      if (tx && tx.meta) {
+        if (token === "SOL") {
+          // Handle SOL transfers
+          if (tx.meta.postBalances && tx.meta.preBalances) {
+            const accountKeys = tx.transaction.message.getAccountKeys().staticAccountKeys.map(k => k.toBase58());
+            const targetIndex = accountKeys.indexOf(targetAddress.toBase58());
 
-        if (targetIndex !== -1) {
-          const balanceDiff = (tx.meta.postBalances[targetIndex] - tx.meta.preBalances[targetIndex]) / LAMPORTS_PER_SOL;
+            if (targetIndex !== -1) {
+              const balanceDiff = (tx.meta.postBalances[targetIndex] - tx.meta.preBalances[targetIndex]) / LAMPORTS_PER_SOL;
 
-          if (balanceDiff > 0) {
-            // Try to find the sender (the one who lost SOL)
-            let sender = null;
-            for (let i = 0; i < tx.meta.preBalances.length; i++) {
-              if (
-                tx.meta.preBalances[i] > tx.meta.postBalances[i] &&
-                accountKeys[i] !== targetAddress.toBase58()
-              ) {
-                sender = accountKeys[i];
+              if (balanceDiff > 0) {
+                // Try to find the sender (the one who lost SOL)
+                let sender = null;
+                for (let i = 0; i < tx.meta.preBalances.length; i++) {
+                  if (
+                    tx.meta.preBalances[i] > tx.meta.postBalances[i] &&
+                    accountKeys[i] !== targetAddress.toBase58()
+                  ) {
+                    sender = accountKeys[i];
+                    break;
+                  }
+                }
+                if (!sender) {
+                  console.log("Sender not found");
+                  continue;
+                }
+                setReceivedAmount(balanceDiff.toString());
+                setReceivedToken("SOL");
+                setSender(sender);
+                setTxHash(sigInfo.signature);
+                console.log(`💸 ${sender} sent ${balanceDiff} SOL to ${targetAddress.toBase58()}`);
+                console.log(`🔗 https://solscan.io/tx/${sigInfo.signature}`);
+                setWaitTxModalVisible(false); // Close the waiting modal
+                setReceivedModal(true); // Show the received modal
+                shouldStop = true; // Stop polling after finding a transaction
                 break;
               }
             }
-            if (!sender) {
-              console.log("Sender not found");
-              continue;
+          }
+        } else if (token === "USDC") {
+          // Handle USDC transfers
+          if (!targetATA) continue;
+          // Get post-transaction balance and compute difference from initial
+          let postBalanceInfo;
+          try {
+            postBalanceInfo = await connection.getTokenAccountBalance(targetATA, "confirmed");
+          } catch (error) {
+            console.error("Error fetching USDC post balance:", error);
+            continue;
+          }
+          const postAmount = postBalanceInfo.value.uiAmount || 0;
+          const balanceDiff = postAmount - usdcInitialBalance;
+          console.log(`Balance diff: ${balanceDiff}`);
+          if (balanceDiff > 0) {
+            // Check if this is a distribution program transaction
+            const DISTRIBUTION_PROGRAM_ID = new PublicKey("5yMSxny1HYeKq6v33SdawjvE4HCRueNwsoS6mdNxHRXF");
+            const isDistributionTx = tx.transaction.message.getAccountKeys().staticAccountKeys.some((key: PublicKey) => 
+              key.equals(DISTRIBUTION_PROGRAM_ID)
+            );
+
+            if (isDistributionTx) {
+              // For distribution program transactions, set sender as the program
+              setSender("Distribution Program");
+            } else {
+              // For direct transfers, try to find the sender
+              const USDC_MINT = new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
+              const accountKeys = tx.transaction.message.getAccountKeys().staticAccountKeys;
+              let sender: string | null = null;
+
+              for (const key of accountKeys) {
+                try {
+                  const senderATA = await getAssociatedTokenAddress(USDC_MINT, key);
+                  const senderPreInfo = await connection.getTokenAccountBalance(senderATA, "confirmed");
+                  const senderPostInfo = await connection.getTokenAccountBalance(senderATA, "confirmed");
+                  const senderPre = senderPreInfo.value.uiAmount || 0;
+                  const senderPost = senderPostInfo.value.uiAmount || 0;
+                  const senderDiff = senderPre - senderPost;
+                  if (senderDiff > 0 && Math.abs(senderDiff - balanceDiff) < 0.000001) {
+                    sender = key.toBase58();
+                    break;
+                  }
+                } catch (e) {
+                  continue; // skip if not a token account
+                }
+              }
+
+              if (sender) {
+                setSender(sender);
+              } else {
+                setSender(""); // Empty string if sender not found
+              }
             }
+
             setReceivedAmount(balanceDiff.toString());
-            setReceivedToken("SOL");
-            setSender(sender);
+            setReceivedToken("USDC");
             setTxHash(sigInfo.signature);
-            console.log(`💸 ${sender} sent ${balanceDiff} SOL to ${targetAddress.toBase58()}`);
+            console.log(`💸 Received ${balanceDiff} USDC to ${targetAddress.toBase58()}`);
             console.log(`🔗 https://solscan.io/tx/${sigInfo.signature}`);
-            setWaitTxModalVisible(false); // Close the waiting modal
-            setReceivedModal(true); // Show the received modal
-            shouldStop = true; // Stop polling after finding a transaction
+            setWaitTxModalVisible(false);
+            setReceivedModal(true);
+            shouldStop = true;
             break;
           }
         }
@@ -127,12 +214,9 @@ async function txPolling(
 
       lastSignature = sigInfo.signature;
     }
-
   };
 
   setInterval(() => fetchTx(lastSignature), 2000);
-
-  // fetchTx(lastSignature);
 }
 
 export default function ReceiveScreen() {
@@ -309,7 +393,8 @@ export default function ReceiveScreen() {
             setReceivedAmount,
             setReceivedToken,
             setSender,
-            setTxHash
+            setTxHash,
+            selectedToken
           );
         } else {
           // For program mode, just show a success message
@@ -421,8 +506,7 @@ export default function ReceiveScreen() {
           <Text style={styles.bottomModalText}>
             You received {" "}
             <Text style={{ fontWeight: "bold" }}>{receivedAmount} {receivedToken}</Text>
-            {" "} from {" "}
-            <Text style={{ fontWeight: "bold" }}>{sender}</Text>
+            {sender != "" && ` from ${sender}`}
           </Text>
         </View>
       </BottomAppModal>
