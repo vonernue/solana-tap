@@ -1,6 +1,6 @@
 # Solana Tap
 
-A mobile application that enables seamless NFC-based Solana token transfers and distribution. Built with React Native, this app allows users to send and receive SOL and USDC tokens through simple NFC taps between devices.
+A mobile application that enables seamless NFC-based Solana token transfers and distribution. Built with React Native, this app allows users to send and receive SOL and USDC tokens through simple NFC tapjpgte s between devices.
 
 ## Features
 
@@ -67,6 +67,22 @@ solana-tap/
 cd contracts/distribution
 anchor build
 ```
+
+## Screenshots
+### Home
+![Home](./screenshots/screenshot-home.jpg)
+
+### Send
+![Send](./screenshots/screenshot-send1.jpg)
+![Send](./screenshots/screenshot-send2.jpg)
+![Send](./screenshots/screenshot-send3.jpg)
+
+### Receive
+![Receive](./screenshots/screenshot-receive.jpg)
+
+### Receive Mode
+![Receive Mode](./screenshots/screenshot-mode1.jpg)
+![Receive Mode](./screenshots/screenshot-mode2.jpg)
 
 ## Acknowledgments
 
